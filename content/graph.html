@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SAR Disk Stats</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    canvas { max-width: 100%; margin-bottom: 40px; }
+    body { font-family: sans-serif; margin: 40px; }
+    h1 { font-size: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Disk Performance (Last Month)</h1>
+  <div id="charts">Loading...</div>
+
+  <script>
+    const metricLabels = {
+      "tps": "Transfers per Second",
+      "rd_sec": "Read Sectors/sec",
+      "wr_sec": "Write Sectors/sec",
+      "avgrq-sz": "Avg Request Size",
+      "avgqu-sz": "Avg Queue Size",
+      "await": "Average Wait (ms)",
+      "svctm": "Service Time (ms)",
+      "util-percent": "Utilization (%)"
+    };
+
+    fetch('disk_stats.json')
+      .then(response => response.json())
+      .then(data => {
+        const sarData = data.flat();
+        const metrics = {};
+        const timeLabels = [];
+
+        sarData.forEach(entry => {
+          const ts = entry.timestamp;
+          const timestamp = `${ts.date} ${ts.time}`;
+          timeLabels.push(timestamp);
+
+          (entry.disk || []).forEach(disk => {
+            const name = disk["disk-device"];
+            for (const [key, val] of Object.entries(disk)) {
+              if (key === "disk-device") continue;
+
+              metrics[key] = metrics[key] || {};
+              metrics[key][name] = metrics[key][name] || [];
+              metrics[key][name].push(val);
+            }
+          });
+        });
+
+        const container = document.getElementById('charts');
+        container.innerHTML = '';
+
+        Object.entries(metrics).forEach(([metricName, diskData]) => {
+          const canvas = document.createElement('canvas');
+          container.appendChild(canvas);
+
+          const datasets = Object.entries(diskData).map(([disk, values]) => ({
+            label: disk,
+            data: values,
+            fill: false,
+            borderColor: '#' + Math.floor(Math.random() * 16777215).toString(16),
+            tension: 0.2
+          }));
+
+          const humanTitle = metricLabels[metricName] || metricName;
+
+          new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+              labels: timeLabels,
+              datasets: datasets
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                title: {
+                  display: true,
+                  text: humanTitle
+                }
+              },
+              scales: {
+                x: {
+                  ticks: { maxTicksLimit: 10 }
+                }
+              }
+            }
+          });
+        });
+      })
+      .catch(error => {
+        document.getElementById('charts').textContent = 'Failed to load data.';
+        console.error('Error loading disk_stats.json:', error);
+      });
+  </script>
+</body>
+</html>
